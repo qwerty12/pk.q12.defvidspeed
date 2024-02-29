@@ -2,6 +2,15 @@ import xbmc
 import threading
 
 
+NORMAL_SPEED = "1.00"
+saved_speed = "1.25"
+
+def setSpeed(speed):
+    xbmc.executebuiltin(f"PlayerControl(Tempo({speed}))")
+
+def getPlaybackSpeed():
+    return xbmc.getInfoLabel("Player.PlaySpeed")
+
 class KodiPlayer(xbmc.Player):
     
     def __init__(self):
@@ -10,7 +19,7 @@ class KodiPlayer(xbmc.Player):
 
     def onAVStarted(self, *args, **kwargs):
         self.stop_seek_timer()
-        self.seek_timer = threading.Timer(1.0, self.execute_builtin)
+        self.seek_timer = threading.Timer(3.0, self.execute_builtin)
         self.seek_timer.start()
 
     def onPlayBackEnded(self):
@@ -19,12 +28,21 @@ class KodiPlayer(xbmc.Player):
     def onPlayBackError(self):
         self.stop_seek_timer()
 
+    def onPlayBackSpeedChanged(self, speed):
+        if speed != 1:
+            return
+
+        ps = getPlaybackSpeed()
+        if ps and ps != NORMAL_SPEED:
+            global saved_speed
+            saved_speed = ps
+
     def onPlayBackStopped(self):
         self.stop_seek_timer()
 
     def execute_builtin(self):
         try:
-            xbmc.executebuiltin("PlayerControl(Tempo(1.25))")
+            setSpeed(saved_speed)
         except:
             pass
         self.seek_timer = None
@@ -46,13 +64,13 @@ class KodiMonitor(xbmc.Monitor):
         if sender == "pk.q12.defvidspeed":
             if method == "Other.toggle_speed":
                 try:
-                    if xbmc.getInfoLabel("Player.PlaySpeed") == "1.25":
+                    if getPlaybackSpeed() == NORMAL_SPEED:
+                        setSpeed(saved_speed)
+                    else:
                         current_time = xbmc.Player().getTime()
-                        xbmc.executebuiltin("PlayerControl(Tempo(1.00))")
+                        setSpeed(NORMAL_SPEED)
                         xbmc.sleep(100)
                         xbmc.Player().seekTime(current_time)
-                    else:
-                        xbmc.executebuiltin("PlayerControl(Tempo(1.25))")
                 except:
                     pass
 
