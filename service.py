@@ -12,15 +12,16 @@ def getPlaybackSpeed():
     return xbmc.getInfoLabel("Player.PlaySpeed")
 
 class KodiPlayer(xbmc.Player):
-    
+
     def __init__(self):
         xbmc.Player.__init__(self)
         self.seek_timer = None
 
     def onAVStarted(self, *args, **kwargs):
         self.stop_seek_timer()
-        self.seek_timer = threading.Timer(3.0, self.execute_builtin)
-        self.seek_timer.start()
+        self.start_seek_timer()
+        if not xbmc.getCondVisibility("Window.IsVisible(videoosd)"):
+            xbmc.executeJSONRPC('{"jsonrpc": "2.0", "method": "Input.ShowOSD", "id": null}')
 
     def onPlayBackEnded(self):
         self.stop_seek_timer()
@@ -41,26 +42,36 @@ class KodiPlayer(xbmc.Player):
         self.stop_seek_timer()
 
     def execute_builtin(self):
+        if xbmc.getCondVisibility("Player.Paused"):
+            self.start_seek_timer()
+            return
+
         try:
             setSpeed(saved_speed)
         except:
             pass
         self.seek_timer = None
 
+    def start_seek_timer(self):
+        self.seek_timer = threading.Timer(2.5, self.execute_builtin)
+        self.seek_timer.start()
+
     def stop_seek_timer(self):
-        if self.seek_timer:
-            try:
-                self.seek_timer.cancel()
-            except:
-                pass
-            self.seek_timer = None
+        if not self.seek_timer:
+            return
+
+        try:
+            self.seek_timer.cancel()
+        except:
+            pass
+        self.seek_timer = None
 
 
 class KodiMonitor(xbmc.Monitor):
     def __init__(self):
         xbmc.Monitor.__init__(self)
 
-    def onNotification(self, sender, method, data):
+    def onNotification(self, sender, method, _):
         if sender == "pk.q12.defvidspeed":
             if method == "Other.toggle_speed":
                 try:
@@ -78,7 +89,5 @@ class KodiMonitor(xbmc.Monitor):
 if __name__ == '__main__':
     monitor = KodiMonitor()
     player = KodiPlayer()
-    
-    while not monitor.abortRequested():
-        if monitor.waitForAbort():
-            break
+
+    monitor.waitForAbort()
