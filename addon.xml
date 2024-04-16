@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="pk.q12.defvidspeed" version="1.0.3" name="Default Video Speed" provider-name="qwerty12">
+<addon id="pk.q12.defvidspeed" version="1.0.4" name="Default Video Speed" provider-name="qwerty12">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
   </requires>
