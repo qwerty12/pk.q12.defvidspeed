@@ -61,17 +61,22 @@ class OverlayText:
 class KodiPlayer(xbmc.Player):
 
     def __init__(self):
-        xbmc.Player.__init__(self)
+        super().__init__(self)
+        self.overlay = OverlayText(font="font30_title")
         self.timers = [None] * 2
+
+    def __del__(self):
+        self.clean()
+        del self.overlay
 
     def onAVStarted(self):
         self.stop_timers()
         if not xbmc.getCondVisibility("Window.IsVisible(videoosd)"):
-            overlay.text = f"[{xbmc.getInfoLabel('VideoPlayer.PlaylistPosition')}/{xbmc.getInfoLabel('VideoPlayer.PlaylistLength')}] {xbmc.getInfoLabel('Player.Filename')}"
-            overlay.show()
+            self.overlay.text = f"[{xbmc.getInfoLabel('VideoPlayer.PlaylistPosition')}/{xbmc.getInfoLabel('VideoPlayer.PlaylistLength')}] {xbmc.getInfoLabel('Player.Filename')}"
+            self.overlay.show()
             self.start_label_timer()
         else:
-            overlay.hide()
+            self.overlay.hide()
         self.start_speed_timer()
 
     def onPlayBackEnded(self):
@@ -101,7 +106,7 @@ class KodiPlayer(xbmc.Player):
         self.timers[0] = None
 
     def label_timer_callback(self):
-        overlay.hide()
+        self.overlay.hide()
         self.timers[1] = None
 
     def start_label_timer(self):
@@ -122,7 +127,7 @@ class KodiPlayer(xbmc.Player):
 
     def clean(self):
         self.stop_timers()
-        overlay.hide()
+        self.overlay.hide()
 
 
 class KodiMonitor(xbmc.Monitor):
@@ -145,11 +150,9 @@ class KodiMonitor(xbmc.Monitor):
 
 
 if __name__ == "__main__":
-    overlay = OverlayText(font="font30_title")
-
     monitor = KodiMonitor()
     player = KodiPlayer()
 
     monitor.waitForAbort()
 
-    del overlay
+    del player
