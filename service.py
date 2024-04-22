@@ -131,10 +131,8 @@ class KodiPlayer(xbmc.Player):
 
 
 class KodiMonitor(xbmc.Monitor):
-    def __init__(self):
-        xbmc.Monitor.__init__(self)
 
-    def onNotification(self, sender, method, _):
+    def onNotification(self, sender, method, data):
         if sender == "pk.q12.defvidspeed":
             if method == "Other.toggle_speed":
                 try:
@@ -145,6 +143,11 @@ class KodiMonitor(xbmc.Monitor):
                         set_speed(NORMAL_SPEED)
                         xbmc.sleep(100)
                         xbmc.Player().seekTime(current_time)
+                except:
+                    pass
+            elif method == "Other.add_speed":
+                try:
+                    set_speed(float(get_playback_speed()) + float(data))
                 except:
                     pass
 

@@ -13,6 +13,8 @@
   <window1110>
     <keyboard>
       <z>NotifyAll(pk.q12.defvidspeed, toggle_speed)</z>
+      <up>NotifyAll(pk.q12.defvidspeed, add_speed, 0.025)</up>
+      <down>NotifyAll(pk.q12.defvidspeed, add_speed, -0.025)</down>
     </keyboard>
   </window1110>
 </keymap>
