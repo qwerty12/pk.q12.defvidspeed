@@ -61,7 +61,7 @@ class OverlayText:
 class KodiPlayer(xbmc.Player):
 
     def __init__(self):
-        super().__init__(self)
+        super().__init__()
         self.overlay = OverlayText(font="font30_title")
         self.timers = [None] * 2
 
@@ -102,23 +102,32 @@ class KodiPlayer(xbmc.Player):
             self.start_speed_timer()
             return
 
-        set_speed(saved_speed)
-        self.timers[0] = None
+        if get_playback_speed() == NORMAL_SPEED:
+            set_speed(saved_speed)
+        self.stop_speed_timer(True)
 
     def label_timer_callback(self):
         self.overlay.hide()
         self.timers[1] = None
 
-    def start_label_timer(self):
-        self.timers[1] = threading.Timer(2.5, self.label_timer_callback)
-        self.timers[1].start()
-
     def start_speed_timer(self):
         self.timers[0] = threading.Timer(3.0, self.speed_timer_callback)
         self.timers[0].start()
 
+    def stop_speed_timer(self, skip_cancel=False):
+        if self.timers[0] is None:
+            return
+        if not skip_cancel:
+            self.timers[0].cancel()
+        self.timers[0] = None
+
+    def start_label_timer(self):
+        self.timers[1] = threading.Timer(2.5, self.label_timer_callback)
+        self.timers[1].start()
+
     def stop_timers(self):
-        for i in range(len(self.timers)):
+        self.stop_speed_timer()
+        for i in range(1, len(self.timers)):
             if not self.timers[i]:
                 continue
 
@@ -143,6 +152,7 @@ class KodiMonitor(xbmc.Monitor):
                 else:
                     current_time = xbmc.Player().getTime()
                     set_speed(NORMAL_SPEED)
+                    player.stop_speed_timer()
                     xbmc.sleep(100)
                     xbmc.Player().seekTime(current_time)
             elif method == "Other.add_speed":
@@ -152,8 +162,8 @@ class KodiMonitor(xbmc.Monitor):
 
 
 if __name__ == "__main__":
-    monitor = KodiMonitor()
     player = KodiPlayer()
+    monitor = KodiMonitor()
 
     monitor.waitForAbort()
 
