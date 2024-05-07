@@ -5,15 +5,6 @@ import xbmcaddon
 import xbmcgui
 
 
-NORMAL_SPEED = "1.00"
-saved_speed = "1.25"
-
-def set_speed(speed):
-    xbmc.executebuiltin(f"PlayerControl(Tempo({speed}))")
-
-def get_playback_speed():
-    return xbmc.getInfoLabel("Player.PlaySpeed")
-
 class OverlayText:
     # https://github.com/elgatito/plugin.video.elementum/blob/master/resources/site-packages/elementum/overlay.py
     def __init__(self, *args, **kwargs):
@@ -57,15 +48,25 @@ class OverlayText:
 
 
 class KodiPlayer(xbmc.Player):
+    SPEED_NORMAL = "1.00"
 
     def __init__(self):
         super().__init__()
+        self.speed_saved = "1.25"
         self.overlay = OverlayText(font="font30_title")
         self.timers = [None] * 2
 
     def __del__(self):
         self.clean()
         del self.overlay
+
+    @staticmethod
+    def speed_get():
+        return xbmc.getInfoLabel("Player.PlaySpeed")
+
+    @staticmethod
+    def speed_set(speed):
+        xbmc.executebuiltin(f"PlayerControl(Tempo({speed}))")
 
     def onAVStarted(self):
         self.stop_timers()
@@ -87,10 +88,9 @@ class KodiPlayer(xbmc.Player):
         if speed != 1:
             return
 
-        ps = get_playback_speed()
-        if ps and ps != NORMAL_SPEED:
-            global saved_speed
-            saved_speed = ps
+        ps = KodiPlayer.speed_get()
+        if ps and ps != KodiPlayer.SPEED_NORMAL:
+            self.speed_saved = ps
 
     def onPlayBackStopped(self):
         self.clean()
@@ -100,8 +100,8 @@ class KodiPlayer(xbmc.Player):
             self.start_speed_timer()
             return
 
-        if get_playback_speed() == NORMAL_SPEED:
-            set_speed(saved_speed)
+        if KodiPlayer.speed_get() == KodiPlayer.SPEED_NORMAL:
+            KodiPlayer.speed_set(self.speed_saved)
         self.stop_speed_timer(True)
 
     def label_timer_callback(self):
@@ -151,16 +151,16 @@ class KodiMonitor(xbmc.Monitor):
 
         try:
             if method == "Other.toggle_speed":
-                if get_playback_speed() == NORMAL_SPEED:
-                    set_speed(saved_speed)
+                if KodiPlayer.speed_get() == KodiPlayer.SPEED_NORMAL:
+                    KodiPlayer.speed_set(self.player.speed_saved)
                 else:
                     current_time = self.player.getTime()
                     self.player.stop_speed_timer()
-                    set_speed(NORMAL_SPEED)
+                    KodiPlayer.speed_set(KodiPlayer.SPEED_NORMAL)
                     xbmc.sleep(100)
                     self.player.seekTime(current_time)
             elif method == "Other.add_speed":
-                set_speed(float(get_playback_speed()) + float(data))
+                KodiPlayer.speed_set(float(KodiPlayer.speed_get()) + float(data))
         except:
             pass
 
