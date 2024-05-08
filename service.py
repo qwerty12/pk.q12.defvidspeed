@@ -49,14 +49,15 @@ class OverlayText:
 
 class KodiPlayer(xbmc.Player):
     SPEED_NORMAL = "1.00"
+    tempo_enabled_warning_emitted = False
 
     def __init__(self):
         super().__init__()
-        self.speed_saved = "1.25"
         self.overlay = OverlayText(font="font30_title")
-        self.timers = [None] * 2
+        self.speed_saved = "1.25"
+        self.timer_speed = None
+        self.timer_label = None
         self.tempo_enabled = False
-        self.tempo_enabled_warning_emitted = False
 
     def __del__(self):
         self.clean()
@@ -64,28 +65,34 @@ class KodiPlayer(xbmc.Player):
 
     @staticmethod
     def speed_get():
-        return xbmc.getInfoLabel("Player.PlaySpeed")
+        ps = xbmc.getInfoLabel("Player.PlaySpeed")
+        return ps if ps != "0.00" else None
 
     @staticmethod
     def speed_set(speed):
         xbmc.executebuiltin(f"PlayerControl(Tempo({speed}))")
 
     def onPlayBackStarted(self):
+        # self.tempo_enabled = False
         self.stop_timers()
-        self.overlay.visible = False
 
     def onAVStarted(self):
         if not self.tempo_enabled:
             self.tempo_enabled = xbmc.getCondVisibility("Player.TempoEnabled")
-            if not self.tempo_enabled and not self.tempo_enabled_warning_emitted:
-                self.tempo_enabled_warning_emitted = True
-                xbmc.log("defvidspeed: changing speed not possible (is \"Sync playback to display\" enabled?)", xbmc.LOGWARNING)
+            if not self.tempo_enabled and not KodiPlayer.tempo_enabled_warning_emitted:
+                KodiPlayer.tempo_enabled_warning_emitted = True
+                xbmc.log(f"{xbmcaddon.Addon().getAddonInfo('id')}: changing speed not possible (is 'Sync playback to display' enabled?)", xbmc.LOGWARNING)
+
         if xbmc.getCondVisibility("!Window.IsVisible(videoosd)"):
             self.overlay.text = f"[{xbmc.getInfoLabel('VideoPlayer.PlaylistPosition')}/{xbmc.getInfoLabel('VideoPlayer.PlaylistLength')}] {xbmc.getInfoLabel('Player.Filename')}"
             self.overlay.visible = True
-            self.start_label_timer()
-        if self.tempo_enabled:
-            self.start_speed_timer()
+            self.timer_label_start()
+        else:
+            self.overlay.visible = False
+
+        if not self.tempo_enabled:
+            return
+        self.timer_speed_start()
 
     def onPlayBackEnded(self):
         self.clean()
@@ -104,41 +111,43 @@ class KodiPlayer(xbmc.Player):
     def onPlayBackStopped(self):
         self.clean()
 
-    def speed_timer_callback(self):
-        if xbmc.getCondVisibility("Player.Paused"):
-            self.start_speed_timer()
+    def timer_speed_cb(self):
+        ps = KodiPlayer.speed_get()
+        if not ps:
+            self.timer_speed_start()
             return
 
-        if KodiPlayer.speed_get() == KodiPlayer.SPEED_NORMAL:
+        if ps == KodiPlayer.SPEED_NORMAL:
             KodiPlayer.speed_set(self.speed_saved)
-        self.stop_speed_timer(True)
+        self.timer_speed = None
 
-    def label_timer_callback(self):
-        self.overlay.visible = False
-        self.timers[1] = None
+    def timer_speed_start(self):
+        self.timer_speed = threading.Timer(3.0, self.timer_speed_cb)
+        self.timer_speed.start()
 
-    def start_speed_timer(self):
-        self.timers[0] = threading.Timer(3.0, self.speed_timer_callback)
-        self.timers[0].start()
-
-    def stop_speed_timer(self, skip_cancel=False):
-        if self.timers[0] is None:
+    def timer_speed_stop(self):
+        if self.timer_speed is None:
             return
-        if not skip_cancel:
-            self.timers[0].cancel()
-        self.timers[0] = None
+        self.timer_speed.cancel()
+        self.timer_speed = None
 
-    def start_label_timer(self):
-        self.timers[1] = threading.Timer(3.0, self.label_timer_callback)
-        self.timers[1].start()
+    def timer_label_cb(self):
+        self.overlay.visible = False
+        self.timer_label = None
+
+    def timer_label_start(self):
+        self.timer_label = threading.Timer(3.0, self.timer_label_cb)
+        self.timer_label.start()
+
+    def timer_label_stop(self):
+        if self.timer_label is None:
+            return
+        self.timer_label.cancel()
+        self.timer_label = None
 
     def stop_timers(self):
-        self.stop_speed_timer()
-        for i in range(1, len(self.timers)):
-            if not self.timers[i]:
-                continue
-            self.timers[i].cancel()
-            self.timers[i] = None
+        self.timer_speed_stop()
+        self.timer_label_stop()
 
     def clean(self):
         self.stop_timers()
@@ -146,6 +155,7 @@ class KodiPlayer(xbmc.Player):
 
 
 class KodiMonitor(xbmc.Monitor):
+    ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
 
     def __init__(self):
         super().__init__()
@@ -154,20 +164,29 @@ class KodiMonitor(xbmc.Monitor):
     def __del__(self):
         del self.player
 
+    def cancel_player_timer(self):
+        self.player.timer_speed_stop()
+        xbmcgui.Dialog().notification(xbmcaddon.Addon().getAddonInfo("name"), "Delayed speed setting cancelled", time=1000, sound=False)
+
     def onNotification(self, sender, method, data):
-        if not self.player.tempo_enabled or sender != "pk.q12.defvidspeed":
+        if sender != KodiMonitor.ADDON_ID or not self.player.tempo_enabled:
             return
 
         try:
             if method == "Other.toggle_speed":
-                if KodiPlayer.speed_get() == KodiPlayer.SPEED_NORMAL:
-                    KodiPlayer.speed_set(self.player.speed_saved)
-                else:
+                ps = KodiPlayer.speed_get()
+                if ps == KodiPlayer.SPEED_NORMAL:
+                    if self.player.timer_speed is None:
+                        KodiPlayer.speed_set(self.player.speed_saved)
+                        return
+                    self.cancel_player_timer()
+                elif ps:
                     current_time = self.player.getTime()
-                    self.player.stop_speed_timer()
                     KodiPlayer.speed_set(KodiPlayer.SPEED_NORMAL)
                     xbmc.sleep(100)
                     self.player.seekTime(current_time)
+                elif self.player.timer_speed is not None:
+                    self.cancel_player_timer()
             elif method == "Other.add_speed":
                 KodiPlayer.speed_set(float(KodiPlayer.speed_get()) + float(data))
         except:
