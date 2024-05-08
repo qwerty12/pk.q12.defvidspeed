@@ -112,12 +112,11 @@ class KodiPlayer(xbmc.Player):
         self.clean()
 
     def timer_speed_cb(self):
-        ps = KodiPlayer.speed_get()
-        if not ps:
+        if xbmc.getCondVisibility("Player.Paused"):
             self.timer_speed_start()
             return
 
-        if ps == KodiPlayer.SPEED_NORMAL:
+        if KodiPlayer.speed_get() == KodiPlayer.SPEED_NORMAL:
             KodiPlayer.speed_set(self.speed_saved)
         self.timer_speed = None
 
