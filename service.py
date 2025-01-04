@@ -121,7 +121,8 @@ class KodiPlayer(xbmc.Player):
         self.timer_speed = None
 
     def timer_speed_start(self):
-        self.timer_speed = threading.Timer(3.0, self.timer_speed_cb)
+        self.timer_speed = threading.Timer(4.0, self.timer_speed_cb)
+        self.timer_speed.daemon = True
         self.timer_speed.start()
 
     def timer_speed_stop(self):
@@ -135,7 +136,8 @@ class KodiPlayer(xbmc.Player):
         self.timer_label = None
 
     def timer_label_start(self):
-        self.timer_label = threading.Timer(3.0, self.timer_label_cb)
+        self.timer_label = threading.Timer(4.0, self.timer_label_cb)
+        self.timer_label.daemon = True
         self.timer_label.start()
 
     def timer_label_stop(self):
@@ -182,8 +184,9 @@ class KodiMonitor(xbmc.Monitor):
                 elif ps:
                     current_time = self.player.getTime()
                     KodiPlayer.speed_set(KodiPlayer.SPEED_NORMAL)
-                    xbmc.sleep(100)
-                    self.player.seekTime(current_time)
+                    xbmc.sleep(150)
+                    if self.player.getTime() >= current_time:
+                        self.player.seekTime(current_time)
                 elif self.player.timer_speed is not None:
                     self.cancel_player_timer()
             elif method == "Other.add_speed":
