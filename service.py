@@ -111,6 +111,14 @@ class KodiPlayer(xbmc.Player):
     def onPlayBackStopped(self):
         self.clean()
 
+    def try_reload(self):
+        index = 0
+        if len(self.getAvailableAudioStreams()) > 1:
+            from json import loads
+            index = loads(xbmc.executeJSONRPC('{"jsonrpc": "2.0", "method": "Player.GetProperties", "params": {"properties": ["currentaudiostream"], "playerid": 1}, "id": null}'))["result"]["currentaudiostream"]["index"]
+            #self.setVideoStream(json_response["currentvideostream"]["index"])
+        self.setAudioStream(index)
+
     def timer_speed_cb(self):
         if xbmc.getCondVisibility("Player.Paused"):
             self.timer_speed_start()
@@ -118,10 +126,14 @@ class KodiPlayer(xbmc.Player):
 
         if KodiPlayer.speed_get() == KodiPlayer.SPEED_NORMAL:
             KodiPlayer.speed_set(self.speed_saved)
+            xbmc.audioSuspend()
+            KodiPlayer.speed_set(self.speed_saved)
+            self.try_reload()
+            xbmc.audioResume()
         self.timer_speed = None
 
     def timer_speed_start(self):
-        self.timer_speed = threading.Timer(4.0, self.timer_speed_cb)
+        self.timer_speed = threading.Timer(10.0, self.timer_speed_cb)
         self.timer_speed.daemon = True
         self.timer_speed.start()
 
