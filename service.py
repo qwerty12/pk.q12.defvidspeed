@@ -61,6 +61,7 @@ class KodiPlayer(xbmc.Player):
         self.timer_speed = False
         self.timer_label = None
         self.tempo_enabled = False
+        self.block_speed_handler = False
 
     def __del__(self):
         self.clean()
@@ -72,8 +73,8 @@ class KodiPlayer(xbmc.Player):
         return ps if ps != "0.00" else None
 
     @staticmethod
-    def speed_set(speed):
-        xbmc.executebuiltin(f"PlayerControl(Tempo({speed}))")
+    def speed_set(speed, wait: bool = False):
+        xbmc.executebuiltin(f"PlayerControl(Tempo({speed}))", wait=wait)
 
     def onPlayBackStarted(self):
         # self.tempo_enabled = False
@@ -104,6 +105,10 @@ class KodiPlayer(xbmc.Player):
         self.clean()
 
     def onPlayBackSpeedChanged(self, speed):
+        if self.block_speed_handler:
+            self.block_speed_handler = False
+            return
+
         if speed != 1 or not self.tempo_enabled:
             return
 
@@ -115,12 +120,15 @@ class KodiPlayer(xbmc.Player):
         self.clean()
 
     def try_reload(self):
-        index = 0
-        if len(self.getAvailableAudioStreams()) > 1:
-            from json import loads
-            index = loads(xbmc.executeJSONRPC('{"jsonrpc": "2.0", "method": "Player.GetProperties", "params": {"properties": ["currentaudiostream"], "playerid": 1}, "id": null}'))["result"]["currentaudiostream"]["index"]
-            #self.setVideoStream(json_response["currentvideostream"]["index"])
-        self.setAudioStream(index)
+        try:
+            index = 0
+            if len(self.getAvailableAudioStreams()) > 1:
+                from json import loads
+                index = loads(xbmc.executeJSONRPC('{"jsonrpc": "2.0", "method": "Player.GetProperties", "params": {"properties": ["currentaudiostream"], "playerid": 1}, "id": null}'))["result"]["currentaudiostream"]["index"] + 0
+                #self.setVideoStream(json_response["currentvideostream"]["index"])
+            self.setAudioStream(index)
+        except Exception:
+            return
 
     def timer_speed_cb(self):
         skip_reset = False
@@ -132,18 +140,21 @@ class KodiPlayer(xbmc.Player):
                     return
 
                 if KodiPlayer.speed_get() == KodiPlayer.SPEED_NORMAL:
-                    KodiPlayer.speed_set(self.speed_saved)
+                    current_time = self.getTime()
+                    self.block_speed_handler = True
                     xbmc.audioSuspend()
-                    KodiPlayer.speed_set(self.speed_saved)
-                    self.try_reload()
+                    KodiPlayer.speed_set(self.speed_saved, wait=True)
                     xbmc.audioResume()
+                    xbmc.executeJSONRPC('{"jsonrpc": "2.0", "method": "Player.SetTempo", "params": {"tempo": %s, "playerid": 1}, "id": null}' % (float(self.speed_saved) + 0.001))
+                    self.try_reload()
+                    self.seekTime(current_time)
         finally:
             if not skip_reset:
                 self.timer_speed = False
 
     def timer_speed_start(self):
         self.timer_speed_stop()
-        xbmc.executebuiltin(f"AlarmClock({KodiPlayer.ALARM_NAME}, NotifyAll({ADDON_ID}, set_initial_speed), 00:00:10, silent)")
+        xbmc.executebuiltin(f"AlarmClock({KodiPlayer.ALARM_NAME}, NotifyAll({ADDON_ID}, set_initial_speed), 00:00:04, silent)")
         self.timer_speed = True
 
     def timer_speed_stop(self):
@@ -174,6 +185,7 @@ class KodiPlayer(xbmc.Player):
     def clean(self):
         self.stop_timers()
         self.overlay.visible = False
+        self.block_speed_handler = False
 
 
 class KodiMonitor(xbmc.Monitor):
@@ -198,12 +210,12 @@ class KodiMonitor(xbmc.Monitor):
                 if ps == KodiPlayer.SPEED_NORMAL:
                     if not self.player.timer_speed:
                         KodiPlayer.speed_set(self.player.speed_saved)
-                        return
-                    self.cancel_player_timer()
+                    else:
+                        self.cancel_player_timer()
                 elif ps:
                     current_time = self.player.getTime()
-                    KodiPlayer.speed_set(KodiPlayer.SPEED_NORMAL)
-                    xbmc.sleep(150)
+                    KodiPlayer.speed_set(KodiPlayer.SPEED_NORMAL, wait=True)
+                    xbmc.sleep(100)
                     if self.player.getTime() >= current_time:
                         self.player.seekTime(current_time)
                 elif self.player.timer_speed:
