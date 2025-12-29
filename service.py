@@ -61,7 +61,6 @@ class KodiPlayer(xbmc.Player):
         self.timer_speed = False
         self.timer_label = None
         self.tempo_enabled = False
-        self.block_speed_handler = False
 
     def __del__(self):
         self.clean()
@@ -99,16 +98,13 @@ class KodiPlayer(xbmc.Player):
         self.timer_speed_start()
 
     def onPlayBackEnded(self):
+        KodiPlayer.speed_set(KodiPlayer.SPEED_NORMAL, wait=True)
         self.clean()
 
     def onPlayBackError(self):
         self.clean()
 
     def onPlayBackSpeedChanged(self, speed):
-        if self.block_speed_handler:
-            self.block_speed_handler = False
-            return
-
         if speed != 1 or not self.tempo_enabled:
             return
 
@@ -118,17 +114,6 @@ class KodiPlayer(xbmc.Player):
 
     def onPlayBackStopped(self):
         self.clean()
-
-    def try_reload(self):
-        try:
-            index = 0
-            if len(self.getAvailableAudioStreams()) > 1:
-                from json import loads
-                index = loads(xbmc.executeJSONRPC('{"jsonrpc": "2.0", "method": "Player.GetProperties", "params": {"properties": ["currentaudiostream"], "playerid": 1}, "id": null}'))["result"]["currentaudiostream"]["index"] + 0
-                #self.setVideoStream(json_response["currentvideostream"]["index"])
-            self.setAudioStream(index)
-        except Exception:
-            return
 
     def timer_speed_cb(self):
         skip_reset = False
@@ -140,14 +125,7 @@ class KodiPlayer(xbmc.Player):
                     return
 
                 if KodiPlayer.speed_get() == KodiPlayer.SPEED_NORMAL:
-                    current_time = self.getTime()
-                    self.block_speed_handler = True
-                    xbmc.audioSuspend()
-                    KodiPlayer.speed_set(self.speed_saved, wait=True)
-                    xbmc.audioResume()
-                    xbmc.executeJSONRPC('{"jsonrpc": "2.0", "method": "Player.SetTempo", "params": {"tempo": %s, "playerid": 1}, "id": null}' % (float(self.speed_saved) + 0.001))
-                    self.try_reload()
-                    self.seekTime(current_time)
+                    KodiPlayer.speed_set(self.speed_saved)
         finally:
             if not skip_reset:
                 self.timer_speed = False
@@ -185,7 +163,6 @@ class KodiPlayer(xbmc.Player):
     def clean(self):
         self.stop_timers()
         self.overlay.visible = False
-        self.block_speed_handler = False
 
 
 class KodiMonitor(xbmc.Monitor):
